@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import cv2, os
 import sys
@@ -68,6 +69,7 @@ class dl_model():
             training_batch_generator = self.image_batch_generator(self.train_image_names_with_labels, self.GENERATOR_BATCH_SIZE, self.EXT_TRAIN_DATA)
             tf_model = Tensorflow_Model(self.dims_image, self.dims_output) # CALCULATE dims_output
             
+            t0 = time.time()
             
             # TRAINING PHASE
             for i, training_batch in enumerate(training_batch_generator):
@@ -76,8 +78,26 @@ class dl_model():
                 else:
                     break
 
+                #saver = tf.train.Saver()
+                #saver.save(tf_model.sess, './model_dir/model.ckpt')
+                
+            t1 = time.time()
+            print("time taken for training: " + str(t1-t0))
 
-#        test_batch_generator = self.image_batch_generator(self.test_image_names, self.BATCH_SIZE, self.EXT_TEST_DATA)
+            test_batch_generator = self.image_batch_generator(self.test_image_names, self.GENERATOR_BATCH_SIZE, self.EXT_TEST_DATA)
+
+            for i, test_batch in enumerate(test_batch_generator):
+                if not i > self.NB_EPOCH:
+                    print(tf_model.test(test_batch))
+                else:
+                    break
+
+
+            writer = tf.summary.FileWriter('log_dir')
+            writer.add_graph(tf.get_default_graph())
+
+            t2 = time.time()
+            print("time taken for testing: " + str(t2-t1))
 
 
 if __name__ == '__main__':

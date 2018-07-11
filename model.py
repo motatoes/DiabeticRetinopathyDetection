@@ -2,7 +2,7 @@ import numpy as np
 import random
 import cv2, os
 import tensorflow as tf
-
+ 
 
 class Tensorflow_Model():
     
@@ -31,6 +31,17 @@ class Tensorflow_Model():
                 5: tf.Variable(tf.random_normal([output_dims])),
             }
 
+        with tf.device('/cpu:0'):
+            self.x = tf.placeholder(tf.float32, [None, self.dims_image['height'], self.dims_image['width'], self.dims_image['channel']])
+            self.y = tf.placeholder(tf.float32, [None, self.dims_output])
+            self._y = self.model(self.x)
+
+            self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self._y, labels=self.y))
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(self.cost)
+            self.corr = tf.equal(tf.argmax(self._y, 1), tf.argmax(self.y, 1))
+            self.accr = tf.reduce_mean(tf.cast(self.corr, tf.float32))
+
+
     def model(self, inp):
         # Layer 1
         input = inp
@@ -58,13 +69,16 @@ class Tensorflow_Model():
         fc1 = tf.nn.relu(tf.matmul(flatten, self.__W[4]) + self.__b[4])
         out = tf.nn.relu(tf.matmul(fc1, self.__W[5]) + self.__b[5])
 #        print(out.get_shape().as_list())
-
+	
         return out
 
     def one_hot(self, Y):
-        max = np.max(Y)
+        # prin/t('the input to one_hot is:', Y)
+        max = int(np.max(Y))
+        # print('onehot Y shape', Y.shape)
         one_hot_encoded = np.zeros([Y.shape[0], max+1])
         for i, y in enumerate(Y):
+            # print(i,y)
             one_hot_encoded[i, y] = 1
         return one_hot_encoded
 
@@ -83,17 +97,37 @@ class Tensorflow_Model():
     def train(self, data):
         avg_cost = 0
         with tf.device('/cpu:0'):
-            x = tf.placeholder(tf.float32, [None, self.dims_image['height'], self.dims_image['width'], self.dims_image['channel']])
-            y = tf.placeholder(tf.float32, [None, self.dims_output])
-            _y = self.model(x)
-            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(_y, y))
-            optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(cost)
-            corr = tf.equal(tf.argmax(_y, 1), tf.argmax(y, 1))
-            accr = tf.reduce_mean(tf.cast(corr, tf.float32))
+            # x = tf.placeholder(tf.float32, [None, self.dims_image['height'], self.dims_image['width'], self.dims_image['channel']])
+            # y = tf.placeholder(tf.float32, [None, self.dims_output])
+            # _y = self.model(x)
+
+            # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=_y, labels=y))
+            # optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(cost)
+            # corr = tf.equal(tf.argmax(_y, 1), tf.argmax(y, 1))
+            # accr = tf.reduce_mean(tf.cast(corr, tf.float32))
             
             batch_x, batch_y = self.get_x_y(data)
-            self.sess.run(tf.initialize_all_variables())
-            self.sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
-            avg_cost += self.sess.run(cost, feed_dict={x: batch_x, y: batch_y})/self.dims_output
-            train_acc = self.sess.run(accr, feed_dict={x: batch_x, y: batch_y})
+            print(batch_y)  
+            self.sess.run(tf.global_variables_initializer())
+
+
+            self.sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
+            avg_cost += self.sess.run(self.cost, feed_dict={self.x: batch_x, self.y: batch_y}) #self.dims_output
+            train_acc = self.sess.run(self.accr, feed_dict={self.x: batch_x, self.y: batch_y})
             print('Average Cost: {}, Training Accuracy: {}'.format(avg_cost, train_acc))
+
+            #tf.saved_model.simple_save(self.sess, './model_dir/model.ckpt', inputs={'x': x}, outputs={'_y': _y})
+
+
+    def test(self, data):
+        # x = tf.placeholder(tf.float32, [None, self.dims_image['height'], self.dims_image['width'], self.dims_image['channel']])
+        # _y = self.model(x)
+
+        self.sess.run(tf.global_variables_initializer())
+
+        out_res = self.sess.run(self._y, {self.x: data})
+        print(out_res)
+
+        classifications = np.argmax(out_res, axis=1)
+        return classifications
+
